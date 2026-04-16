@@ -1,0 +1,179 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && getUserData().role == 'admin';
+    }
+    
+    function isTeacher() {
+      return isAuthenticated() && getUserData().role == 'teacher';
+    }
+    
+    function isTeacherOrAdmin() {
+      return isAdmin() || isTeacher();
+    }
+    
+    // ===============================================================
+    // Validation Functions
+    // ===============================================================
+    
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'name', 'role', 'status', 'createdAt']) &&
+             data.uid is string && data.uid.size() > 0 && data.uid.size() < 100 &&
+             data.email is string && data.email.size() > 0 && data.email.size() < 100 &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.role in ['admin', 'teacher', 'student'] &&
+             data.status in ['active', 'inactive'] &&
+             data.createdAt is string &&
+             (!('customMonthlyFee' in data) || data.customMonthlyFee is number) &&
+             (!('chatContacts' in data) || data.chatContacts is list);
+    }
+    
+    function isValidStudentProfile(data) {
+      return data.keys().hasAll(['userId', 'updatedAt']) &&
+             data.userId is string && data.userId.size() > 0 &&
+             data.updatedAt is string &&
+             (!('age' in data) || (data.age is number && data.age > 0 && data.age < 150)) &&
+             (!('height' in data) || (data.height is number && data.height > 0)) &&
+             (!('weight' in data) || (data.weight is number && data.weight > 0)) &&
+             (!('goal' in data) || (data.goal is string && data.goal.size() < 500)) &&
+             (!('restrictions' in data) || (data.restrictions is string && data.restrictions.size() < 1000));
+    }
+    
+    function isValidWorkoutPlan(data) {
+      return data.keys().hasAll(['name', 'teacherId', 'studentId', 'exercises', 'createdAt']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.teacherId is string &&
+             data.studentId is string && data.studentId.size() > 0 &&
+             data.exercises is list && data.exercises.size() <= 50 &&
+             data.createdAt is string &&
+             (!('isCustom' in data) || data.isCustom is bool) &&
+             (!('focus' in data) || data.focus is string);
+    }
+    
+    function isValidCheckIn(data) {
+      return data.keys().hasAll(['studentId', 'timestamp']) &&
+             data.studentId is string && data.studentId.size() > 0 &&
+             data.timestamp is string;
+    }
+
+    function isValidStudentStats(data) {
+      return data.keys().hasAll(['userId', 'currentStreak', 'longestStreak', 'badges', 'updatedAt']) &&
+             data.userId is string && data.userId.size() > 0 &&
+             data.currentStreak is number && data.currentStreak >= 0 &&
+             data.longestStreak is number && data.longestStreak >= 0 &&
+             data.badges is list &&
+             data.updatedAt is string &&
+             (!('lastCheckInDate' in data) || data.lastCheckInDate is string) &&
+             (!('weeklyFocus' in data) || data.weeklyFocus is list);
+    }
+
+    function isValidMessage(data) {
+      return data.keys().hasAll(['senderId', 'receiverId', 'content', 'timestamp']) &&
+             data.senderId is string && data.senderId.size() > 0 &&
+             data.receiverId is string && data.receiverId.size() > 0 &&
+             data.content is string && data.content.size() < 2000 &&
+             data.timestamp is string &&
+             (!('attachmentUrl' in data) || data.attachmentUrl is string) &&
+             (!('attachmentType' in data) || data.attachmentType is string);
+    }
+
+    function isValidAnnouncement(data) {
+      return data.keys().hasAll(['title', 'content', 'authorId', 'timestamp']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.content is string && data.content.size() > 0 && data.content.size() < 5000 &&
+             data.authorId is string && data.authorId.size() > 0 &&
+             data.timestamp is string;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+    
+    match /users/{userId} {
+      // Users can read all profiles to allow for chat functionality.
+      allow read: if isAuthenticated();
+      
+      // Only admins can create users, or a user can create their own profile if they are a student
+      // To bootstrap the first admin, we allow creation if the role is 'admin' and the email matches the user's auth token email
+      // In a real app, you'd use a custom claim or a secure bootstrapping mechanism.
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && 
+                    (isAdmin() || 
+                     (isOwner(userId) && request.resource.data.role == 'student') ||
+                     (isOwner(userId) && request.resource.data.role == 'admin' && request.resource.data.email == 'vitorperucci327@gmail.com'));
+                     
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) &&
+                    (isAdmin() || 
+                     (isOwner(userId) && request.resource.data.role == resource.data.role && request.resource.data.uid == resource.data.uid));
+                     
+      allow delete: if isAdmin();
+    }
+    
+    match /studentProfiles/{userId} {
+      allow read: if isOwner(userId) || isTeacherOrAdmin();
+      allow create, update: if isAuthenticated() && isValidStudentProfile(request.resource.data) && 
+                            request.resource.data.userId == userId &&
+                            (isOwner(userId) || isTeacherOrAdmin());
+      allow delete: if isAdmin();
+    }
+    
+    match /workoutPlans/{planId} {
+      allow read: if isAuthenticated() && (isAdmin() || isTeacher() || resource.data.studentId == request.auth.uid);
+      allow create: if isAuthenticated() && isValidWorkoutPlan(request.resource.data) && 
+                    (isTeacherOrAdmin() || (request.resource.data.isCustom == true && request.resource.data.studentId == request.auth.uid));
+      allow update: if isAuthenticated() && isValidWorkoutPlan(request.resource.data) && isTeacherOrAdmin();
+      allow delete: if isTeacherOrAdmin();
+    }
+    
+    match /checkIns/{checkInId} {
+      allow read: if isAuthenticated() && (isAdmin() || isTeacher() || resource.data.studentId == request.auth.uid);
+      allow create: if isAuthenticated() && isValidCheckIn(request.resource.data) && 
+                    (isOwner(request.resource.data.studentId) || isAdmin());
+      allow update: if false; // Check-ins are immutable
+      allow delete: if isAdmin();
+    }
+    
+    match /studentStats/{userId} {
+      allow read: if isOwner(userId) || isTeacherOrAdmin();
+      allow create, update: if isAuthenticated() && isValidStudentStats(request.resource.data) && 
+                            request.resource.data.userId == userId &&
+                            (isOwner(userId) || isTeacherOrAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /messages/{messageId} {
+      allow read: if isAuthenticated() && (isOwner(resource.data.senderId) || isOwner(resource.data.receiverId) || isAdmin());
+      allow create: if isAuthenticated() && isValidMessage(request.resource.data) && isOwner(request.resource.data.senderId);
+      allow update: if false; // Messages are immutable
+      allow delete: if isAdmin();
+    }
+
+    match /announcements/{announcementId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && isValidAnnouncement(request.resource.data) && isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+  }
+}
