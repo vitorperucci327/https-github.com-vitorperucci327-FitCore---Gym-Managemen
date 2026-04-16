@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User as FirebaseUser, onAuthStateChanged, signInWithPopup } from 'firebase/auth';
+import { User as FirebaseUser, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
-import { auth, db, googleProvider } from '../firebase';
+import { auth, db } from '../firebase';
 
 export type UserRole = 'admin' | 'teacher' | 'student';
 
@@ -20,7 +20,8 @@ interface AuthContextType {
   user: AppUser | null;
   firebaseUser: FirebaseUser | null;
   loading: boolean;
-  signInWithGoogle: () => Promise<void>;
+  signInWithEmail: (email: string, pass: string) => Promise<void>;
+  registerWithEmail: (email: string, pass: string, name: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -47,13 +48,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const newUser: AppUser = {
               uid: fUser.uid,
               email: fUser.email || '',
-              name: fUser.displayName || 'New User',
+              name: fUser.displayName || 'Novo Usuário',
               role: isFirstAdmin ? 'admin' : 'student',
               status: 'active',
               createdAt: new Date().toISOString(),
             };
             await setDoc(userRef, newUser);
             setUser(newUser);
+          } else {
+             // We fallback to setting it in snapshot but this avoids blinking
+             setUser(userDoc.data() as AppUser);
           }
 
           // Listen for real-time updates to the user document
@@ -78,17 +82,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const signInWithGoogle = async () => {
-    try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (error: any) {
-      if (error.code === 'auth/popup-closed-by-user') {
-        // User closed the popup, ignore silently
-        return;
-      }
-      console.error("Error signing in with Google", error);
-      throw error;
-    }
+  const signInWithEmail = async (email: string, pass: string) => {
+    await signInWithEmailAndPassword(auth, email, pass);
+  };
+
+  const registerWithEmail = async (email: string, pass: string, name: string) => {
+    const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+    await updateProfile(userCredential.user, { displayName: name });
+    
+    // Create their document explicitly here to guarantee it gets their given name
+    const isFirstAdmin = email === 'vitorperucci327@gmail.com';
+    const newUser: AppUser = {
+      uid: userCredential.user.uid,
+      email: email,
+      name: name,
+      role: isFirstAdmin ? 'admin' : 'student',
+      status: 'active',
+      createdAt: new Date().toISOString(),
+    };
+    await setDoc(doc(db, 'users', userCredential.user.uid), newUser);
   };
 
   const signOut = async () => {
@@ -96,7 +108,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, firebaseUser, loading, signInWithGoogle, signOut }}>
+    <AuthContext.Provider value={{ user, firebaseUser, loading, signInWithEmail, registerWithEmail, signOut }}>
       {children}
     </AuthContext.Provider>
   );
