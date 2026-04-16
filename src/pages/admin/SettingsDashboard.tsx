@@ -1,12 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Shield, Bell, CreditCard, X, Save, Trash2, DollarSign } from 'lucide-react';
-import { doc, getDoc, setDoc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
-import { db } from '../../firebase';
+import { Settings, Shield, Bell, CreditCard, X, Save, Trash2, DollarSign, Key, Send, Search, UserPlus, Edit2 } from 'lucide-react';
+import { doc, getDoc, setDoc, collection, query, where, getDocs, writeBatch, orderBy } from 'firebase/firestore';
+import { sendPasswordResetEmail, getAuth as getSecondaryAuth, createUserWithEmailAndPassword } from 'firebase/auth';
+import { initializeApp, getApps } from 'firebase/app';
+import { db, auth } from '../../firebase';
+import { AppUser } from '../../contexts/AuthContext';
+import firebaseConfig from '../../../firebase-applet-config.json';
 
 export function SettingsDashboard() {
   const [activeSetting, setActiveSetting] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  
+  // Users state for user management
+  const [usersList, setUsersList] = useState<AppUser[]>([]);
+  const [searchUser, setSearchUser] = useState('');
+  
+  const [showUserForm, setShowUserForm] = useState(false);
+  const [userForm, setUserForm] = useState({ id: '', name: '', email: '', age: '', password: '', confirmPassword: '' });
+  const [isNewUser, setIsNewUser] = useState(false);
+  const [userFormError, setUserFormError] = useState('');
 
   // Form states
   const [general, setGeneral] = useState({ gymName: 'Nexus Gym', phone: '', address: '' });
@@ -27,6 +40,100 @@ export function SettingsDashboard() {
     };
     fetchSettings();
   }, []);
+
+  const handleFetchUsers = async () => {
+    setLoading(true);
+    try {
+      const q = query(collection(db, 'users'), orderBy('name'));
+      const snap = await getDocs(q);
+      const fetchedUsers = snap.docs.map(doc => doc.data() as AppUser);
+      setUsersList(fetchedUsers);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSetting === 'Gestão de Usuários') {
+      handleFetchUsers();
+      setShowUserForm(false);
+    }
+  }, [activeSetting]);
+
+  const openNewUserForm = () => {
+    setUserForm({ id: '', name: '', email: '', age: '', password: '', confirmPassword: '' });
+    setIsNewUser(true);
+    setUserFormError('');
+    setShowUserForm(true);
+  };
+
+  const openEditUserForm = (user: AppUser) => {
+    setUserForm({ id: user.uid, name: user.name, email: user.email, age: (user.age || '').toString(), password: '', confirmPassword: '' });
+    setIsNewUser(false);
+    setUserFormError('');
+    setShowUserForm(true);
+  };
+
+  const handleSaveUser = async () => {
+    setUserFormError('');
+    setLoading(true);
+    try {
+      if (isNewUser) {
+        if (!userForm.name || !userForm.email || !userForm.password) {
+           throw new Error("Preencha todos os campos obrigatórios.");
+        }
+        if (userForm.password !== userForm.confirmPassword) {
+          throw new Error("As senhas não coincidem.");
+        }
+        if (userForm.password.length < 6) {
+          throw new Error("A senha deve ter pelo menos 6 caracteres.");
+        }
+        
+        let secondaryApp;
+        const apps = getApps();
+        secondaryApp = apps.find(app => app.name === 'SecondaryAuthApp');
+        if (!secondaryApp) {
+           secondaryApp = initializeApp(firebaseConfig, 'SecondaryAuthApp');
+        }
+        const secondaryAuth = getSecondaryAuth(secondaryApp);
+        
+        const cred = await createUserWithEmailAndPassword(secondaryAuth, userForm.email, userForm.password);
+        
+        const newUser = {
+          uid: cred.user.uid,
+          email: userForm.email,
+          name: userForm.name,
+          age: parseInt(userForm.age) || 0,
+          role: 'student',
+          status: 'active',
+          createdAt: new Date().toISOString()
+        };
+        await setDoc(doc(db, 'users', cred.user.uid), newUser);
+        await secondaryAuth.signOut();
+        
+        setSuccessMsg("Usuário criado com sucesso!");
+      } else {
+        // Edit existing user
+        if (!userForm.name) throw new Error("O nome é obrigatório.");
+        await setDoc(doc(db, 'users', userForm.id), {
+          name: userForm.name,
+          age: parseInt(userForm.age) || 0,
+        }, { merge: true });
+        setSuccessMsg("Usuário atualizado com sucesso!");
+      }
+      setShowUserForm(false);
+      handleFetchUsers();
+      setTimeout(() => setSuccessMsg(''), 3000);
+    } catch (err: any) {
+      console.error(err);
+      if (err.code === 'auth/email-already-in-use') setUserFormError("Este email já está em uso.");
+      else setUserFormError(err.message || "Ocorreu um erro ao salvar o usuário.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSave = async () => {
     setLoading(true);
@@ -207,6 +314,147 @@ export function SettingsDashboard() {
             </div>
           </div>
         );
+      case 'Gestão de Usuários':
+        const filteredUsers = usersList.filter(u => 
+          u.name.toLowerCase().includes(searchUser.toLowerCase()) || 
+          u.email.toLowerCase().includes(searchUser.toLowerCase())
+        );
+
+        if (showUserForm) {
+          return (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between mb-4">
+                 <h3 className="text-lg font-bold text-text-main">{isNewUser ? 'Adicionar Novo Usuário' : 'Editar Usuário'}</h3>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-text-dim mb-1">Nome Completo *</label>
+                <input 
+                  type="text" 
+                  value={userForm.name}
+                  onChange={(e) => setUserForm({...userForm, name: e.target.value})}
+                  className="w-full bg-surface-bright border border-border-color rounded-xl px-4 py-2.5 text-text-main focus:outline-none focus:border-accent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-text-dim mb-1">Email {isNewUser ? '*' : '(Não pode ser alterado aqui)'}</label>
+                <input 
+                  type="email" 
+                  value={userForm.email}
+                  disabled={!isNewUser}
+                  onChange={(e) => setUserForm({...userForm, email: e.target.value})}
+                  className="w-full bg-surface-bright border border-border-color rounded-xl px-4 py-2.5 text-text-main focus:outline-none focus:border-accent disabled:opacity-50"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-text-dim mb-1">Idade</label>
+                <input 
+                  type="number" 
+                  value={userForm.age}
+                  onChange={(e) => setUserForm({...userForm, age: e.target.value})}
+                  className="w-full bg-surface-bright border border-border-color rounded-xl px-4 py-2.5 text-text-main focus:outline-none focus:border-accent"
+                />
+              </div>
+
+              {isNewUser && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-text-dim mb-1">Senha *</label>
+                    <input 
+                      type="password" 
+                      value={userForm.password}
+                      onChange={(e) => setUserForm({...userForm, password: e.target.value})}
+                      className="w-full bg-surface-bright border border-border-color rounded-xl px-4 py-2.5 text-text-main focus:outline-none focus:border-accent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-text-dim mb-1">Repita a Senha *</label>
+                    <input 
+                      type="password" 
+                      value={userForm.confirmPassword}
+                      onChange={(e) => setUserForm({...userForm, confirmPassword: e.target.value})}
+                      className="w-full bg-surface-bright border border-border-color rounded-xl px-4 py-2.5 text-text-main focus:outline-none focus:border-accent"
+                    />
+                  </div>
+                </>
+              )}
+
+              {!isNewUser && (
+                 <div className="text-xs text-text-dim p-2 bg-surface-bright rounded-lg border border-border-color">
+                   <strong>Nota sobre Senha:</strong> Por políticas de segurança globais, você não pode alterar a senha de usuários existentes diretamente. Para redefinir a senha deste usuário, use a função "Esqueceu a senha" da aba de login, que enviará um link de recuperação diretamente para <strong>{userForm.email}</strong>.
+                 </div>
+              )}
+
+              {userFormError && (
+                <div className="text-red-500 text-sm mt-2">{userFormError}</div>
+              )}
+
+              <div className="flex gap-3 mt-8">
+                <button 
+                  onClick={() => setShowUserForm(false)}
+                  className="flex-1 bg-surface-bright border border-border-color text-text-main font-bold py-3 rounded-xl hover:bg-border-color transition-colors"
+                >
+                  Voltar
+                </button>
+                <button 
+                  onClick={handleSaveUser}
+                  disabled={loading}
+                  className="flex-1 bg-accent text-background font-bold py-3 rounded-xl hover:opacity-90 transition-opacity flex items-center justify-center disabled:opacity-50"
+                >
+                  <Save className="w-5 h-5 mr-2" />
+                  {loading ? 'Salvando...' : 'Salvar'}
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <div className="space-y-4">
+            <div className="flex gap-2 relative">
+              <div className="relative flex-1">
+                <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-text-dim" />
+                <input
+                  type="text"
+                  placeholder="Nome ou email..."
+                  value={searchUser}
+                  onChange={(e) => setSearchUser(e.target.value)}
+                  className="w-full bg-surface-bright border border-border-color rounded-xl pl-10 pr-4 py-2.5 text-sm text-text-main focus:outline-none focus:border-accent"
+                />
+              </div>
+              <button
+                onClick={openNewUserForm}
+                className="shrink-0 flex items-center justify-center bg-accent text-background font-bold px-4 rounded-xl hover:opacity-90 transition-opacity"
+                title="Criar novo usuário"
+              >
+                 <UserPlus className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="max-h-64 overflow-y-auto pr-2 space-y-2">
+               {loading && <div className="text-center py-4 text-text-dim text-sm">Carregando usuários...</div>}
+               {!loading && filteredUsers.length === 0 && (
+                 <div className="text-center py-4 text-text-dim text-sm">Nenhum usuário encontrado.</div>
+               )}
+               {filteredUsers.map(user => (
+                 <div key={user.uid} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-surface-bright border border-border-color rounded-xl gap-3">
+                   <div className="flex-1 min-w-0">
+                     <div className="font-semibold text-text-main text-sm truncate">{user.name}</div>
+                     <div className="text-xs text-text-dim truncate">{user.email} {user.age ? `• ${user.age} anos` : ''}</div>
+                   </div>
+                   <button
+                     onClick={() => openEditUserForm(user)}
+                     className="shrink-0 flex items-center justify-center bg-surface border border-border-color text-text-main text-xs font-bold px-3 py-2 rounded-lg hover:border-accent transition-colors disabled:opacity-50"
+                   >
+                     <Edit2 className="w-3 h-3 mr-1.5" /> Editar
+                   </button>
+                 </div>
+               ))}
+            </div>
+          </div>
+        );
       default:
         return null;
     }
@@ -237,6 +485,21 @@ export function SettingsDashboard() {
             <div>
               <h3 className="font-semibold text-text-main">Segurança e Acessos</h3>
               <p className="text-sm text-text-dim">Gerenciar permissões e limpar dados</p>
+            </div>
+          </div>
+        </div>
+
+        <div 
+          onClick={() => setActiveSetting('Gestão de Usuários')}
+          className="bg-surface border border-border-color rounded-2xl p-6 hover:border-accent transition-colors cursor-pointer"
+        >
+          <div className="flex items-center mb-4">
+            <div className="p-3 bg-surface-bright rounded-xl mr-4">
+              <Key className="w-6 h-6 text-accent" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-text-main">Gestão de Usuários</h3>
+              <p className="text-sm text-text-dim">Criar e editar cadastros</p>
             </div>
           </div>
         </div>
@@ -318,7 +581,7 @@ export function SettingsDashboard() {
             <div className="p-6">
               {renderModalContent()}
               
-              {activeSetting !== 'Segurança e Acessos' && (
+              {activeSetting !== 'Segurança e Acessos' && activeSetting !== 'Gestão de Usuários' && (
                 <div className="flex gap-3 mt-8">
                   <button 
                     onClick={() => setActiveSetting(null)}

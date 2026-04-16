@@ -3,11 +3,9 @@ import { useAuth } from '../contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
 
 export function Login() {
-  const { signInWithEmail, registerWithEmail, resetPassword, user, loading } = useAuth();
+  const { signInWithEmail, resetPassword, user, loading } = useAuth();
   
-  const [isRegistering, setIsRegistering] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
-  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -36,20 +34,13 @@ export function Login() {
         if (!email.trim()) throw new Error("O email é obrigatório.");
         await resetPassword(email);
         setSuccessMsg('Email de redefinição enviado! Verifique sua caixa de entrada.');
-      } else if (isRegistering) {
-        if (!name.trim()) throw new Error("O nome é obrigatório para cadastro.");
-        await registerWithEmail(email, password, name);
       } else {
         await signInWithEmail(email, password);
       }
     } catch (e: any) {
       console.error(e);
-      if (e.code === 'auth/email-already-in-use') {
-        setErrorMsg('Este email já está em uso.');
-      } else if (e.code === 'auth/invalid-credential') {
+      if (e.code === 'auth/invalid-credential') {
         setErrorMsg('Email ou senha incorretos.');
-      } else if (e.code === 'auth/weak-password') {
-        setErrorMsg('A senha deve ter pelo menos 6 caracteres.');
       } else if (e.code === 'auth/user-not-found') {
         setErrorMsg('Nenhuma conta encontrada com este email.');
       } else {
@@ -69,10 +60,10 @@ export function Login() {
           </div>
         </div>
         <h2 className="mt-6 text-center text-2xl font-bold tracking-tight text-text-main">
-          {isResetting ? 'Redefinir senha' : isRegistering ? 'Crie sua conta' : 'Acesse sua conta'}
+          {isResetting ? 'Redefinir senha' : 'Acesse sua conta'}
         </h2>
         <p className="mt-2 text-center text-sm text-text-dim">
-          Gestão inteligente para sua academia
+          Gestão exclusiva para convidados
         </p>
       </div>
 
@@ -80,19 +71,6 @@ export function Login() {
         <div className="bg-surface py-8 px-4 shadow sm:rounded-2xl sm:px-10 border border-border-color">
           
           <form className="space-y-4" onSubmit={handleSubmit}>
-            {!isResetting && isRegistering && (
-              <div>
-                <label className="block text-sm font-medium text-text-main">Nome completo</label>
-                <input
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="mt-1 block w-full border border-border-color rounded-xl px-3 py-2 bg-background text-text-main focus:outline-none focus:ring-accent focus:border-accent"
-                  placeholder="Seu nome"
-                />
-              </div>
-            )}
             
             <div>
               <label className="block text-sm font-medium text-text-main">Email</label>
@@ -120,7 +98,7 @@ export function Login() {
               </div>
             )}
 
-            {!isResetting && !isRegistering && (
+            {!isResetting && (
               <div className="flex items-center justify-between mt-2">
                 <div />
                 <div className="text-sm">
@@ -143,12 +121,12 @@ export function Login() {
               disabled={isSubmitting}
               className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm bg-accent text-background font-bold hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent transition-colors disabled:opacity-50"
             >
-              {isSubmitting ? 'Aguarde...' : isResetting ? 'Enviar link de redefinição' : isRegistering ? 'Cadastrar' : 'Entrar'}
+              {isSubmitting ? 'Aguarde...' : isResetting ? 'Enviar link de redefinição' : 'Entrar'}
             </button>
           </form>
 
           <div className="mt-6 text-center space-y-2">
-            {isResetting ? (
+            {isResetting && (
                <button
                  type="button"
                  onClick={() => { setIsResetting(false); setErrorMsg(''); setSuccessMsg(''); }}
@@ -156,14 +134,6 @@ export function Login() {
                >
                  Voltar para o login
                </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => { setIsRegistering(!isRegistering); setErrorMsg(''); }}
-                className="text-sm text-accent hover:underline focus:outline-none"
-              >
-                {isRegistering ? 'Já tem conta? Fazer login' : 'Ainda não tem conta? Clique aqui para criar'}
-              </button>
             )}
           </div>
           

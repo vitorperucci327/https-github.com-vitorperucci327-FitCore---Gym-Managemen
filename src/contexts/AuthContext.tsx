@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User as FirebaseUser, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail } from 'firebase/auth';
+import { User as FirebaseUser, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail, signInWithPopup } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
-import { auth, db } from '../firebase';
+import { auth, db, googleProvider } from '../firebase';
 
 export type UserRole = 'admin' | 'teacher' | 'student';
 
@@ -14,6 +14,7 @@ export interface AppUser {
   createdAt: string;
   customMonthlyFee?: number;
   chatContacts?: string[];
+  age?: number;
 }
 
 interface AuthContextType {
@@ -22,6 +23,7 @@ interface AuthContextType {
   loading: boolean;
   signInWithEmail: (email: string, pass: string) => Promise<void>;
   registerWithEmail: (email: string, pass: string, name: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -108,12 +110,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await sendPasswordResetEmail(auth, email);
   };
 
+  const signInWithGoogle = async () => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (error: any) {
+      if (error.code === 'auth/popup-closed-by-user') {
+        // User closed the popup, ignore silently
+        return;
+      }
+      console.error("Error signing in with Google", error);
+      throw error;
+    }
+  };
+
   const signOut = async () => {
     await auth.signOut();
   };
 
   return (
-    <AuthContext.Provider value={{ user, firebaseUser, loading, signInWithEmail, registerWithEmail, resetPassword, signOut }}>
+    <AuthContext.Provider value={{ user, firebaseUser, loading, signInWithEmail, registerWithEmail, signInWithGoogle, resetPassword, signOut }}>
       {children}
     </AuthContext.Provider>
   );
