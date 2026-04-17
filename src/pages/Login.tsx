@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
 
 export function Login() {
-  const { signInWithGoogle, user, loading } = useAuth();
+  const { signInWithGoogle, user, loading, authError } = useAuth();
   
   const [errorMsg, setErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -87,7 +87,14 @@ export function Login() {
           </div>
 
           {errorMsg && (
-            <div className="text-red-500 text-sm mt-4 text-center">{errorMsg}</div>
+            <div className="bg-red-500/10 text-red-500 p-3 rounded-lg text-sm mt-4 text-center border border-red-500/20">{errorMsg}</div>
+          )}
+          
+          {authError && (
+            <div className="bg-red-500/10 text-red-500 p-3 rounded-lg text-sm mt-4 text-center border border-red-500/20">
+               <strong>Acesso negado internamente pelo Firebase:</strong><br/>
+               {authError}
+            </div>
           )}
           
         </div>

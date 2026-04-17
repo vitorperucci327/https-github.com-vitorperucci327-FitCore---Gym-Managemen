@@ -21,6 +21,7 @@ interface AuthContextType {
   user: AppUser | null;
   firebaseUser: FirebaseUser | null;
   loading: boolean;
+  authError: string | null;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -31,12 +32,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
     let unsubscribeUser: () => void;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (fUser) => {
       setFirebaseUser(fUser);
+      setAuthError(null);
       if (fUser) {
         try {
           const userRef = doc(db, 'users', fUser.uid);
@@ -77,21 +80,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
              setUser(userDoc.data() as AppUser);
           }
 
-          // Listen for real-time updates to the user document
-          unsubscribeUser = onSnapshot(userRef, (docSnap) => {
-            if (docSnap.exists()) {
-              setUser(docSnap.data() as AppUser);
+            // Listen for real-time updates to the user document
+            unsubscribeUser = onSnapshot(userRef, (docSnap) => {
+              if (docSnap.exists()) {
+                setUser(docSnap.data() as AppUser);
+              }
+            }, (error) => {
+               console.error("Firestore snapshot error:", error);
+               setAuthError("Erro de permissão no Banco de Dados (Firestore Rules).");
+            });
+          } catch (error: any) {
+            console.error("Error fetching user data:", error);
+            if (error.code === 'permission-denied' || error.message.includes('permission')) {
+               setAuthError("O Firebase bloqueou o acesso. Você precisa atualizar as 'Regras' do Firestore no Firebase Console para permitir leitura e escrita.");
+            } else {
+               setAuthError("Erro ao conectar ao banco de dados Firestore. Verifique se você ativou o Firestore Database no projeto.");
             }
-          });
-        } catch (error) {
-          console.error("Error fetching user data:", error);
+            // Sign out the user because the app is unusable without DB profile
+            await auth.signOut();
+          }
+        } else {
+          setUser(null);
+          if (unsubscribeUser) unsubscribeUser();
         }
-      } else {
-        setUser(null);
-        if (unsubscribeUser) unsubscribeUser();
-      }
-      setLoading(false);
-    });
+        setLoading(false);
+      });
 
     return () => {
       unsubscribeAuth();
@@ -117,7 +130,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, firebaseUser, loading, signInWithGoogle, signOut }}>
+    <AuthContext.Provider value={{ user, firebaseUser, loading, authError, signInWithGoogle, signOut }}>
       {children}
     </AuthContext.Provider>
   );
