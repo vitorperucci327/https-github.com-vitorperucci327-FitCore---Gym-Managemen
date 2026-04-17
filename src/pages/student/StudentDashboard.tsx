@@ -60,11 +60,24 @@ export function StudentDashboard() {
 
   // Finished activities state
   const [completedExercises, setCompletedExercises] = useState<Record<string, boolean>>({});
+  
+  const [dailyMessage, setDailyMessage] = useState('Bem-vindo ao treino! Dê o seu melhor hoje.');
 
   useEffect(() => {
     if (!user) return;
 
     const fetchStatsAndPlans = async () => {
+      // Fetch Daily Config
+      try {
+        const configDoc = await getDoc(doc(db, 'settings', 'config'));
+        if (configDoc.exists()) {
+           const general = configDoc.data().general;
+           if (general?.dailyMessage) {
+              setDailyMessage(general.dailyMessage);
+           }
+        }
+      } catch (e) { console.error(e) }
+
       // Fetch Stats
       const statsDoc = await getDoc(doc(db, 'studentStats', user.uid));
       if (statsDoc.exists()) {
@@ -252,35 +265,69 @@ export function StudentDashboard() {
             {workoutPlans.length > 0 ? `Seu plano atual: ${workoutPlans[0].name}` : 'Nenhum plano de treino atribuído ainda.'}
           </p>
         </div>
-        <div className="flex items-center space-x-2 bg-warning/10 text-warning px-3 py-1.5 rounded-full text-sm font-bold">
+        <div className="flex items-center space-x-2 bg-warning/10 text-warning px-3 py-1.5 rounded-full text-sm font-bold shadow-sm">
           <Flame className="w-4 h-4" />
           <span>{stats?.currentStreak || 0} dias seguidos</span>
         </div>
       </div>
+      
+      {/* Inspirational Message */}
+      <div className="bg-gradient-to-r from-accent/10 to-accent/5 border border-accent/20 rounded-2xl p-6 relative overflow-hidden">
+         <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+            <Flame className="w-24 h-24 text-accent" />
+         </div>
+         <h3 className="font-bold border-border-color text-text-main flex items-center gap-2 mb-2">
+            <Trophy className="w-5 h-5 text-accent" />
+            Mensagem do Dia
+         </h3>
+         <p className="text-text-main/90 font-medium italic text-lg leading-relaxed relative z-10">"{dailyMessage}"</p>
+      </div>
 
-      {/* Check-in Card */}
-      <div className="bg-surface border border-border-color rounded-2xl p-6 flex items-center justify-between">
-        <div>
-          <h3 className="font-semibold text-lg text-text-main">Check-in na Academia</h3>
-          <p className="text-text-dim text-sm mt-1">Registre sua presença para liberar o treino</p>
+      {/* Check-in Card and Water Tracker */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-surface border border-border-color rounded-2xl p-6 flex flex-col justify-between">
+          <div>
+            <h3 className="font-semibold text-lg text-text-main">Check-in na Academia</h3>
+            <p className="text-text-dim text-sm mt-1 mb-6">Registre sua presença para liberar o treino</p>
+          </div>
+          <button 
+            onClick={handleCheckIn}
+            disabled={checkingIn || checkedIn}
+            className="w-full bg-accent text-background px-6 py-4 rounded-xl font-bold hover:opacity-90 transition-opacity flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {checkedIn ? (
+              <>
+                <CheckCircle2 className="w-6 h-6 mr-2 text-background" />
+                Presença Confirmada!
+              </>
+            ) : (
+              <>
+                <MapPin className="w-6 h-6 mr-2" />
+                Fazer Check-in Agora
+              </>
+            )}
+          </button>
         </div>
-        <button 
-          onClick={handleCheckIn}
-          disabled={checkingIn || checkedIn}
-          className="bg-accent text-background px-6 py-3 rounded-xl font-bold hover:opacity-90 transition-opacity flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {checkedIn ? (
-            <>
-              <CheckCircle2 className="w-5 h-5 mr-2 text-background" />
-              Feito!
-            </>
-          ) : (
-            <>
-              <MapPin className="w-5 h-5 mr-2" />
-              Fazer Check-in
-            </>
-          )}
-        </button>
+
+        <div className="bg-surface border border-border-color rounded-2xl p-6 flex flex-col justify-between">
+            <div className="flex justify-between items-start mb-4">
+                <h3 className="font-semibold text-lg text-text-main flex items-center gap-2">
+                    <span className="text-xl">💧</span> Hidratação Diária
+                </h3>
+            </div>
+            
+            <div className="flex-1 flex flex-col justify-center">
+                <p className="text-text-dim text-sm mb-4">Mantenha-se bem hidratado para otimizar os seus resultados!</p>
+                <div className="flex items-center gap-4">
+                    <span className="text-3xl font-bold text-accent">2L</span>
+                    <span className="text-sm font-medium text-text-dim">Meta: 3L / Dia</span>
+                </div>
+                <div className="w-full bg-surface-bright rounded-full h-3 mt-4 overflow-hidden border border-border-color">
+                    <div className="bg-accent h-3 rounded-full" style={{ width: '66%' }}></div>
+                </div>
+                <p className="text-xs text-text-dim mt-3 text-center">Faltam 1 Litro para bater a meta</p>
+            </div>
+        </div>
       </div>
 
       {/* Foco de Hoje & Resumo da Semana */}

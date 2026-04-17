@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, where, getDocs, addDoc, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, deleteDoc, doc, onSnapshot, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { AppUser } from '../../contexts/AuthContext';
 import { Search, CalendarCheck, CheckCircle2, History, X, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -50,10 +50,64 @@ export function CheckInDashboard() {
   const handleCheckIn = async (studentId: string) => {
     setCheckingIn(studentId);
     try {
+      const now = new Date();
+      const today = now.toISOString().split('T')[0];
+
       await addDoc(collection(db, 'checkIns'), {
         studentId,
-        timestamp: new Date().toISOString()
+        timestamp: now.toISOString()
       });
+
+      // Update student stats for consecutive days
+      const statsRef = doc(db, 'studentStats', studentId);
+      const statsDoc = await getDoc(statsRef);
+      
+      if (statsDoc.exists()) {
+        const stats = statsDoc.data();
+        let newStreak = stats.currentStreak || 0;
+        const lastCheckIn = stats.lastCheckInDate ? new Date(stats.lastCheckInDate) : null;
+        
+        if (lastCheckIn) {
+          const diffTime = Math.abs(now.getTime() - lastCheckIn.getTime());
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          
+          if (diffDays === 1) {
+            newStreak += 1;
+          } else if (diffDays > 1) {
+            newStreak = 1;
+          }
+        } else {
+          newStreak = 1;
+        }
+
+        const newLongest = Math.max(newStreak, stats.longestStreak || 0);
+        
+        const newBadges = [...(stats.badges || [])];
+        if (newStreak >= 7 && !newBadges.includes('7 Dias Seguidos 🏆')) {
+          newBadges.push('7 Dias Seguidos 🏆');
+        }
+        if (newStreak >= 30 && !newBadges.includes('Monstro do Mês 🦍')) {
+          newBadges.push('Monstro do Mês 🦍');
+        }
+
+        await setDoc(statsRef, {
+          ...stats,
+          currentStreak: newStreak,
+          longestStreak: newLongest,
+          lastCheckInDate: today,
+          badges: newBadges,
+          updatedAt: now.toISOString()
+        });
+      } else {
+        // Initialize stats if they don't exist
+        await setDoc(statsRef, {
+          currentStreak: 1,
+          longestStreak: 1,
+          lastCheckInDate: today,
+          badges: [],
+          updatedAt: now.toISOString()
+        });
+      }
     } catch (error) {
       console.error("Erro ao fazer check-in:", error);
     } finally {

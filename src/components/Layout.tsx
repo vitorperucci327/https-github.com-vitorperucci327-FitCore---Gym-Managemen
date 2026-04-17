@@ -42,6 +42,7 @@ export function Layout() {
     ],
     student: [
       { name: 'Meu Treino', href: '/student', icon: Dumbbell },
+      { name: 'Dieta', href: '/student/nutrition', icon: Activity },
       { name: 'Evolução', href: '/student/progress', icon: Activity },
       { name: 'Mensagens', href: '/student/chat', icon: MessageSquare },
     ],

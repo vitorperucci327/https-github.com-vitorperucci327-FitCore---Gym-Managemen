@@ -127,8 +127,8 @@ export function StudentEvolution() {
           <div className="w-10 h-10 rounded-xl bg-success/10 flex items-center justify-center mb-3">
             <Award className="w-5 h-5 text-success" />
           </div>
-          <p className="text-2xl font-bold text-text-main">Nível 1</p>
-          <p className="text-sm text-text-dim">Iniciante</p>
+          <p className="text-2xl font-bold text-text-main">Meta Diária</p>
+          <p className="text-sm text-text-dim">Treino Concluído</p>
         </div>
       </div>
 

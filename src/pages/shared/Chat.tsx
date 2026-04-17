@@ -85,28 +85,31 @@ export function Chat() {
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     const sevenDaysAgoStr = sevenDaysAgo.toISOString();
 
-    // Listen for messages between current user and selected contact from the last 7 days
+    // Listen for messages between current user and selected contact
+    // We filter by timestamp locally to avoid requiring manual Firestore composite indexes
     const q1 = query(
       collection(db, 'messages'),
       where('senderId', '==', user.uid),
-      where('receiverId', '==', selectedContact.uid),
-      where('timestamp', '>=', sevenDaysAgoStr)
+      where('receiverId', '==', selectedContact.uid)
     );
     
     const q2 = query(
       collection(db, 'messages'),
       where('senderId', '==', selectedContact.uid),
-      where('receiverId', '==', user.uid),
-      where('timestamp', '>=', sevenDaysAgoStr)
+      where('receiverId', '==', user.uid)
     );
 
     const unsubscribe1 = onSnapshot(q1, (snapshot) => {
-      const msgs1 = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message));
+      const msgs1 = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as Message))
+        .filter(msg => msg.timestamp >= sevenDaysAgoStr);
       updateMessages(msgs1, 'sent');
     });
 
     const unsubscribe2 = onSnapshot(q2, (snapshot) => {
-      const msgs2 = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message));
+      const msgs2 = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as Message))
+        .filter(msg => msg.timestamp >= sevenDaysAgoStr);
       updateMessages(msgs2, 'received');
     });
 
@@ -131,8 +134,7 @@ export function Chat() {
     
     const qAllReceived = query(
       collection(db, 'messages'),
-      where('receiverId', '==', user.uid),
-      where('timestamp', '>=', sevenDaysAgo.toISOString())
+      where('receiverId', '==', user.uid)
     );
 
     const unsubscribe = onSnapshot(qAllReceived, (snapshot) => {
@@ -143,7 +145,12 @@ export function Chat() {
       }
       
       const changes = snapshot.docChanges();
-      const hasNewIncoming = changes.some(change => change.type === 'added');
+      const recentChanges = changes.filter(change => {
+          const msg = change.doc.data() as Message;
+          return msg.timestamp >= sevenDaysAgo.toISOString();
+      });
+      
+      const hasNewIncoming = recentChanges.some(change => change.type === 'added');
       
       if (hasNewIncoming) {
         // Play subtle bloop
@@ -173,7 +180,7 @@ export function Chat() {
         // In a real robust system, each message would need a "read" boolean, 
         // but since we derive everything from timestamps and selections in this session:
         const unreadByContact: Record<string, number> = {};
-        changes.forEach(change => {
+        recentChanges.forEach(change => {
             if (change.type === 'added') {
                const msg = change.doc.data() as Message;
                if (selectedContact?.uid !== msg.senderId) {
@@ -287,13 +294,13 @@ export function Chat() {
       }
     } catch (error: any) {
       console.error("Error sending message:", error);
-      if (error.code === 'storage/unauthorized') {
-        alert('Erro de permissão: O Firebase Storage não está configurado para permitir uploads. Contate o administrador.');
+      if (error.code && error.code.includes('storage/unauthorized')) {
+        alert('O Firebase bloqueou o envio da imagem. Você precisa criar um banco "Storage" no Console do Firebase e colocar as regras como "allow read, write: if request.auth != null;"');
       } else {
-        alert('Erro ao enviar mensagem. Verifique sua conexão.');
+        alert(`Erro ao enviar mensagem: ${error.message}`);
       }
     } finally {
-      setUploading(false);
+      setUploading(false); // Make sure this is reached to unlock
     }
   };
 

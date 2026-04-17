@@ -19,7 +19,7 @@ export function SettingsDashboard() {
   const [userFormError, setUserFormError] = useState('');
 
   // Form states
-  const [general, setGeneral] = useState({ gymName: 'Nexus Gym', phone: '', address: '' });
+  const [general, setGeneral] = useState({ gymName: 'Nexus Gym', phone: '', address: '', dailyMessage: 'Bem-vindo ao treino! Dê o seu melhor hoje.' });
   const [payment, setPayment] = useState({ pixKey: '', gateway: 'stripe' });
   const [notifications, setNotifications] = useState({ email: true, push: false });
   const [finance, setFinance] = useState({ monthlyFee: 100, defaultPaymentDay: 10 });
@@ -220,6 +220,16 @@ export function SettingsDashboard() {
                 onChange={(e) => setGeneral({...general, address: e.target.value})}
                 className="w-full bg-surface-bright border border-border-color rounded-xl px-4 py-2.5 text-text-main focus:outline-none focus:border-accent"
                 placeholder="Rua, Número, Bairro, Cidade"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-dim mb-1">Mensagem de Incentivo Diária (Aparece para todos os alunos no Meu Treino)</label>
+              <textarea 
+                value={general.dailyMessage}
+                onChange={(e) => setGeneral({...general, dailyMessage: e.target.value})}
+                rows={3}
+                className="w-full bg-surface-bright border border-border-color rounded-xl px-4 py-2.5 text-text-main focus:outline-none focus:border-accent resize-none mt-1"
+                placeholder="Digite a mensagem do dia..."
               />
             </div>
           </div>
