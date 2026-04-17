@@ -1,11 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Settings, Shield, Bell, CreditCard, X, Save, Trash2, DollarSign, Key, Send, Search, UserPlus, Edit2 } from 'lucide-react';
 import { doc, getDoc, setDoc, collection, query, where, getDocs, writeBatch, orderBy } from 'firebase/firestore';
-import { sendPasswordResetEmail, getAuth as getSecondaryAuth, createUserWithEmailAndPassword } from 'firebase/auth';
-import { initializeApp, getApps } from 'firebase/app';
-import { db, auth } from '../../firebase';
+import { db } from '../../firebase';
 import { AppUser } from '../../contexts/AuthContext';
-import firebaseConfig from '../../../firebase-applet-config.json';
 
 export function SettingsDashboard() {
   const [activeSetting, setActiveSetting] = useState<string | null>(null);

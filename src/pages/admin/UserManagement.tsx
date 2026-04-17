@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { collection, query, where, onSnapshot, doc, setDoc, deleteDoc, getDocs, addDoc, updateDoc, deleteField, arrayUnion } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { AppUser } from '../../contexts/AuthContext';
+import { AppUser, UserRole } from '../../contexts/AuthContext';
 import { Search, Plus, UserCircle, X, Trash2, Dumbbell, PlusCircle, MinusCircle, MessageSquare } from 'lucide-react';
 
 export function UserManagement() {
