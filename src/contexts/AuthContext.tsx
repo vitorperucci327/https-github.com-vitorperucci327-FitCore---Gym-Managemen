@@ -21,10 +21,7 @@ interface AuthContextType {
   user: AppUser | null;
   firebaseUser: FirebaseUser | null;
   loading: boolean;
-  signInWithEmail: (email: string, pass: string) => Promise<void>;
-  registerWithEmail: (email: string, pass: string, name: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
-  resetPassword: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -46,15 +43,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const userDoc = await getDoc(userRef);
           
           if (!userDoc.exists()) {
-            // Auto-create user profile as student by default, or admin if it's the specific email
             const isFirstAdmin = fUser.email === 'vitorperucci327@gmail.com';
+            
+            // Check if there's a pre-registered invite for this email
+            let role: UserRole = isFirstAdmin ? 'admin' : 'student';
+            let age = 0;
+            let name = fUser.displayName || 'Novo Usuário';
+
+            if (fUser.email) {
+               const preRegRef = doc(db, 'pre_registered_users', fUser.email.toLowerCase());
+               const preRegDoc = await getDoc(preRegRef);
+               if (preRegDoc.exists()) {
+                  const data = preRegDoc.data();
+                  role = data.role || 'student';
+                  age = data.age || 0;
+                  if (data.name) name = data.name;
+               }
+            }
+
             const newUser: AppUser = {
               uid: fUser.uid,
               email: fUser.email || '',
-              name: fUser.displayName || 'Novo Usuário',
-              role: isFirstAdmin ? 'admin' : 'student',
+              name: name,
+              role: role,
               status: 'active',
               createdAt: new Date().toISOString(),
+              age: age
             };
             await setDoc(userRef, newUser);
             setUser(newUser);
@@ -85,31 +99,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const signInWithEmail = async (email: string, pass: string) => {
-    await signInWithEmailAndPassword(auth, email, pass);
-  };
-
-  const registerWithEmail = async (email: string, pass: string, name: string) => {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
-    await updateProfile(userCredential.user, { displayName: name });
-    
-    // Create their document explicitly here to guarantee it gets their given name
-    const isFirstAdmin = email === 'vitorperucci327@gmail.com';
-    const newUser: AppUser = {
-      uid: userCredential.user.uid,
-      email: email,
-      name: name,
-      role: isFirstAdmin ? 'admin' : 'student',
-      status: 'active',
-      createdAt: new Date().toISOString(),
-    };
-    await setDoc(doc(db, 'users', userCredential.user.uid), newUser);
-  };
-
-  const resetPassword = async (email: string) => {
-    await sendPasswordResetEmail(auth, email);
-  };
-
   const signInWithGoogle = async () => {
     try {
       await signInWithPopup(auth, googleProvider);
@@ -128,7 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, firebaseUser, loading, signInWithEmail, registerWithEmail, signInWithGoogle, resetPassword, signOut }}>
+    <AuthContext.Provider value={{ user, firebaseUser, loading, signInWithGoogle, signOut }}>
       {children}
     </AuthContext.Provider>
   );

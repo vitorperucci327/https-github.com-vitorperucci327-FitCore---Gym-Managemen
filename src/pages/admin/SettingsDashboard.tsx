@@ -47,7 +47,26 @@ export function SettingsDashboard() {
       const q = query(collection(db, 'users'), orderBy('name'));
       const snap = await getDocs(q);
       const fetchedUsers = snap.docs.map(doc => doc.data() as AppUser);
-      setUsersList(fetchedUsers);
+      
+      const preRegQ = query(collection(db, 'pre_registered_users'));
+      const preRegSnap = await getDocs(preRegQ);
+      const preRegUsers = preRegSnap.docs.map(doc => {
+         const data = doc.data();
+         return {
+            uid: data.email, // using email as id for UI editing
+            email: data.email,
+            name: data.name || 'Pendente de Primeiro Acesso',
+            age: data.age || 0,
+            role: data.role || 'student',
+            status: 'inactive'
+         } as AppUser;
+      });
+
+      // Filter out pre-reg users that already exist in fetchedUsers by email
+      const activeEmails = new Set(fetchedUsers.map(u => u.email.toLowerCase()));
+      const pendingUsers = preRegUsers.filter(u => !activeEmails.has(u.email.toLowerCase()));
+
+      setUsersList([...pendingUsers, ...fetchedUsers]);
     } catch (error) {
       console.error("Error fetching users:", error);
     } finally {
@@ -81,47 +100,38 @@ export function SettingsDashboard() {
     setLoading(true);
     try {
       if (isNewUser) {
-        if (!userForm.name || !userForm.email || !userForm.password) {
+        if (!userForm.name || !userForm.email) {
            throw new Error("Preencha todos os campos obrigatórios.");
         }
-        if (userForm.password !== userForm.confirmPassword) {
-          throw new Error("As senhas não coincidem.");
-        }
-        if (userForm.password.length < 6) {
-          throw new Error("A senha deve ter pelo menos 6 caracteres.");
-        }
         
-        let secondaryApp;
-        const apps = getApps();
-        secondaryApp = apps.find(app => app.name === 'SecondaryAuthApp');
-        if (!secondaryApp) {
-           secondaryApp = initializeApp(firebaseConfig, 'SecondaryAuthApp');
-        }
-        const secondaryAuth = getSecondaryAuth(secondaryApp);
+        const preRegRef = doc(db, 'pre_registered_users', userForm.email.toLowerCase());
+        await setDoc(preRegRef, {
+           email: userForm.email,
+           name: userForm.name,
+           age: parseInt(userForm.age) || 0,
+           role: userForm.role
+        });
         
-        const cred = await createUserWithEmailAndPassword(secondaryAuth, userForm.email, userForm.password);
-        
-        const newUser = {
-          uid: cred.user.uid,
-          email: userForm.email,
-          name: userForm.name,
-          age: parseInt(userForm.age) || 0,
-          role: userForm.role,
-          status: 'active',
-          createdAt: new Date().toISOString()
-        };
-        await setDoc(doc(db, 'users', cred.user.uid), newUser);
-        await secondaryAuth.signOut();
-        
-        setSuccessMsg("Usuário criado com sucesso!");
+        setSuccessMsg("Convite gerado com sucesso! O usuário receberá este cargo ao logar pelo Google com este e-mail.");
       } else {
         // Edit existing user
         if (!userForm.name) throw new Error("O nome é obrigatório.");
-        await setDoc(doc(db, 'users', userForm.id), {
-          name: userForm.name,
-          age: parseInt(userForm.age) || 0,
-          role: userForm.role,
-        }, { merge: true });
+        
+        // Check if it's a pending user (UID === email)
+        if (userForm.id === userForm.email) {
+            await setDoc(doc(db, 'pre_registered_users', userForm.email.toLowerCase()), {
+              email: userForm.email,
+              name: userForm.name,
+              age: parseInt(userForm.age) || 0,
+              role: userForm.role,
+            }, { merge: true });
+        } else {
+            await setDoc(doc(db, 'users', userForm.id), {
+              name: userForm.name,
+              age: parseInt(userForm.age) || 0,
+              role: userForm.role,
+            }, { merge: true });
+        }
         setSuccessMsg("Usuário atualizado com sucesso!");
       }
       setShowUserForm(false);
@@ -373,32 +383,8 @@ export function SettingsDashboard() {
               </div>
 
               {isNewUser && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-text-dim mb-1">Senha (Fictícia/Inicial) *</label>
-                    <input 
-                      type="password" 
-                      value={userForm.password}
-                      onChange={(e) => setUserForm({...userForm, password: e.target.value})}
-                      className="w-full bg-surface-bright border border-border-color rounded-xl px-4 py-2.5 text-text-main focus:outline-none focus:border-accent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-text-dim mb-1">Repita a Senha *</label>
-                    <input 
-                      type="password" 
-                      value={userForm.confirmPassword}
-                      onChange={(e) => setUserForm({...userForm, confirmPassword: e.target.value})}
-                      className="w-full bg-surface-bright border border-border-color rounded-xl px-4 py-2.5 text-text-main focus:outline-none focus:border-accent"
-                    />
-                  </div>
-                </>
-              )}
-
-              {!isNewUser && (
                  <div className="text-xs text-text-dim p-2 bg-surface-bright rounded-lg border border-border-color">
-                   <strong>Por que não posso alterar a senha aqui?</strong> Como medida de proteção, o Google Firebase exige um serviço de Backend avançado (fora do escopo do design atual) para alterar a senha diretamente, ou que as senhas sejam alteradas unicamente fazendo o usuário pedir redefinição via e-mail pela tela de Login. <br/><br/>
-                   Se o aluno não tem acesso ao e-mail, exclua o aluno na aba do Painel Firebase e crie um novo.
+                   <strong>Como funciona:</strong> Este usuário fará login usando a <strong>conta do Google</strong>. Você está inserindo o e-mail dele aqui na "Lista de Permissões". Assim que ele clicar em "Entrar com Google" usando este mesmo e-mail, os cargos e configurações dados aqui serão aplicados.
                  </div>
               )}
 
