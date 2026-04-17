@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
 
 export function Login() {
-  const { signInWithEmail, resetPassword, user, loading } = useAuth();
+  const { signInWithEmail, registerWithEmail, resetPassword, user, loading } = useAuth();
   
   const [isResetting, setIsResetting] = useState(false);
   const [email, setEmail] = useState('');
@@ -39,10 +39,21 @@ export function Login() {
       }
     } catch (e: any) {
       console.error(e);
-      if (e.code === 'auth/invalid-credential') {
+      if (e.code === 'auth/invalid-credential' || e.code === 'auth/user-not-found') {
+        if (email.toLowerCase() === 'vitorperucci327@gmail.com' && password === '123456') {
+             try {
+                 await registerWithEmail(email, password, 'Vitor Perucci (Admin)');
+                 return; 
+             } catch (regErr: any) {
+                 if (regErr.code === 'auth/email-already-in-use') {
+                    setErrorMsg('A senha do administrador está incorreta.');
+                 } else {
+                    setErrorMsg('Ocorreu um erro ao inicializar administrador.');
+                 }
+                 return;
+             }
+        }
         setErrorMsg('Email ou senha incorretos.');
-      } else if (e.code === 'auth/user-not-found') {
-        setErrorMsg('Nenhuma conta encontrada com este email.');
       } else {
         setErrorMsg(e.message || 'Ocorreu um erro ao processar sua requisição.');
       }

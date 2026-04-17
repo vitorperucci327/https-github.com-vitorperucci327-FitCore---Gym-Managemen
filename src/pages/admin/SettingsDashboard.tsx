@@ -17,7 +17,7 @@ export function SettingsDashboard() {
   const [searchUser, setSearchUser] = useState('');
   
   const [showUserForm, setShowUserForm] = useState(false);
-  const [userForm, setUserForm] = useState({ id: '', name: '', email: '', age: '', password: '', confirmPassword: '' });
+  const [userForm, setUserForm] = useState({ id: '', name: '', email: '', age: '', password: '', confirmPassword: '', role: 'student' });
   const [isNewUser, setIsNewUser] = useState(false);
   const [userFormError, setUserFormError] = useState('');
 
@@ -63,14 +63,14 @@ export function SettingsDashboard() {
   }, [activeSetting]);
 
   const openNewUserForm = () => {
-    setUserForm({ id: '', name: '', email: '', age: '', password: '', confirmPassword: '' });
+    setUserForm({ id: '', name: '', email: '', age: '', password: '', confirmPassword: '', role: 'student' });
     setIsNewUser(true);
     setUserFormError('');
     setShowUserForm(true);
   };
 
   const openEditUserForm = (user: AppUser) => {
-    setUserForm({ id: user.uid, name: user.name, email: user.email, age: (user.age || '').toString(), password: '', confirmPassword: '' });
+    setUserForm({ id: user.uid, name: user.name, email: user.email, age: (user.age || '').toString(), password: '', confirmPassword: '', role: user.role || 'student' });
     setIsNewUser(false);
     setUserFormError('');
     setShowUserForm(true);
@@ -106,7 +106,7 @@ export function SettingsDashboard() {
           email: userForm.email,
           name: userForm.name,
           age: parseInt(userForm.age) || 0,
-          role: 'student',
+          role: userForm.role,
           status: 'active',
           createdAt: new Date().toISOString()
         };
@@ -120,6 +120,7 @@ export function SettingsDashboard() {
         await setDoc(doc(db, 'users', userForm.id), {
           name: userForm.name,
           age: parseInt(userForm.age) || 0,
+          role: userForm.role,
         }, { merge: true });
         setSuccessMsg("Usuário atualizado com sucesso!");
       }
@@ -358,10 +359,23 @@ export function SettingsDashboard() {
                 />
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-text-dim mb-1">Nível de Acesso *</label>
+                <select 
+                  value={userForm.role}
+                  onChange={(e) => setUserForm({...userForm, role: e.target.value})}
+                  className="w-full bg-surface-bright border border-border-color rounded-xl px-4 py-2.5 text-text-main focus:outline-none focus:border-accent"
+                >
+                  <option value="student">Aluno</option>
+                  <option value="teacher">Professor</option>
+                  <option value="admin">Administrador</option>
+                </select>
+              </div>
+
               {isNewUser && (
                 <>
                   <div>
-                    <label className="block text-sm font-medium text-text-dim mb-1">Senha *</label>
+                    <label className="block text-sm font-medium text-text-dim mb-1">Senha (Fictícia/Inicial) *</label>
                     <input 
                       type="password" 
                       value={userForm.password}
@@ -383,7 +397,8 @@ export function SettingsDashboard() {
 
               {!isNewUser && (
                  <div className="text-xs text-text-dim p-2 bg-surface-bright rounded-lg border border-border-color">
-                   <strong>Nota sobre Senha:</strong> Por políticas de segurança globais, você não pode alterar a senha de usuários existentes diretamente. Para redefinir a senha deste usuário, use a função "Esqueceu a senha" da aba de login, que enviará um link de recuperação diretamente para <strong>{userForm.email}</strong>.
+                   <strong>Por que não posso alterar a senha aqui?</strong> Como medida de proteção, o Google Firebase exige um serviço de Backend avançado (fora do escopo do design atual) para alterar a senha diretamente, ou que as senhas sejam alteradas unicamente fazendo o usuário pedir redefinição via e-mail pela tela de Login. <br/><br/>
+                   Se o aluno não tem acesso ao e-mail, exclua o aluno na aba do Painel Firebase e crie um novo.
                  </div>
               )}
 
@@ -442,7 +457,7 @@ export function SettingsDashboard() {
                  <div key={user.uid} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-surface-bright border border-border-color rounded-xl gap-3">
                    <div className="flex-1 min-w-0">
                      <div className="font-semibold text-text-main text-sm truncate">{user.name}</div>
-                     <div className="text-xs text-text-dim truncate">{user.email} {user.age ? `• ${user.age} anos` : ''}</div>
+                     <div className="text-xs text-text-dim truncate">{user.email} {user.age ? `• ${user.age} anos` : ''} • Nível: {user.role === 'admin' ? 'Administrador' : user.role === 'teacher' ? 'Professor' : 'Aluno'}</div>
                    </div>
                    <button
                      onClick={() => openEditUserForm(user)}
