@@ -1,7 +1,7 @@
 import React from 'react';
 import { Navigate, Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Dumbbell, Users, Activity, Settings, LogOut, LayoutDashboard, CalendarCheck, MessageSquare } from 'lucide-react';
+import { Dumbbell, Users, Activity, Settings, LogOut, LayoutDashboard, CalendarCheck, MessageSquare, Menu, X } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -12,6 +12,11 @@ export function cn(...inputs: ClassValue[]) {
 export function Layout() {
   const { user, signOut, loading } = useAuth();
   const location = useLocation();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [location.pathname]);
 
   if (loading) {
     return (
@@ -52,15 +57,29 @@ export function Layout() {
 
   return (
     <div className="min-h-screen bg-background flex text-text-main">
+      {/* Mobile Sidebar Overlay */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm md:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <div className="w-60 bg-surface border-r border-border-color flex flex-col hidden md:flex p-6">
-        <div className="flex items-center mb-12">
+      <div className={cn(
+        "fixed inset-y-0 left-0 z-50 w-64 bg-surface border-r border-border-color flex flex-col p-6 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 h-full",
+        isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+      )}>
+        <div className="flex items-center justify-between mb-12">
           <div className="font-extrabold text-xl tracking-tight flex items-center gap-2">
             NEXUS<span className="text-accent">GYM</span>
           </div>
+          <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden text-text-dim hover:text-text-main p-1">
+            <X className="h-6 w-6" />
+          </button>
         </div>
         
-        <nav className="flex-1 space-y-1">
+        <nav className="flex-1 space-y-1 overflow-y-auto min-h-0 pr-2">
           {navItems.map((item) => {
             const isActive = location.pathname === item.href || location.pathname.startsWith(item.href + '/');
             return (
@@ -113,14 +132,22 @@ export function Layout() {
       </div>
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden shrink-0 w-full md:w-auto">
         {/* Mobile header */}
-        <div className="md:hidden h-16 bg-surface border-b border-border-color flex items-center justify-between px-4">
-          <div className="font-extrabold text-xl tracking-tight flex items-center gap-2">
-            NEXUS<span className="text-accent">GYM</span>
+        <div className="md:hidden shrink-0 h-16 bg-surface border-b border-border-color flex items-center justify-between px-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="text-text-dim hover:text-text-main transition-colors p-1"
+            >
+              <Menu className="h-6 w-6" />
+            </button>
+            <div className="font-extrabold text-xl tracking-tight flex items-center gap-1">
+              NEXUS<span className="text-accent">GYM</span>
+            </div>
           </div>
           <button onClick={signOut} className="flex items-center gap-2 p-2 text-text-dim hover:text-warning transition-colors" title="Sair da Conta">
-            <span className="text-sm font-medium">Sair</span>
+            <span className="text-sm font-medium sr-only">Sair</span>
             <LogOut className="h-5 w-5" />
           </button>
         </div>
